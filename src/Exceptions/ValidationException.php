@@ -1,0 +1,20 @@
+<?php
+
+namespace Framework\Exceptions;
+
+class ValidationException extends \Exception {
+    protected $errors = [];
+
+    public function __construct($errors = []) {
+        $this->errors = $errors;
+        parent::__construct('Validation failed');
+    }
+
+    public function getErrors() {
+        return $this->errors;
+    }
+
+    public function errors() {
+        return $this->errors;
+    }
+}

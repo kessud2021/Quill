@@ -1,0 +1,33 @@
+{
+  "name": "framework/core",
+  "description": "Production-grade PHP MVC Framework",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.2",
+    "ext-pdo": "*",
+    "ext-json": "*",
+    "ext-filter": "*",
+    "ext-hash": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Framework\\": "src/",
+      "App\\": "app/"
+    },
+    "files": [
+      "src/Support/helpers.php"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "dev": "php -S localhost:8000 -t public",
+    "migrate": "php artisan migrate",
+    "seed": "php artisan seed",
+    "test": "phpunit"
+  }
+}
