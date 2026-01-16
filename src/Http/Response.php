@@ -2,56 +2,150 @@
 
 namespace Framework\Http;
 
-class Response {
-    protected $body;
-    protected $statusCode;
-    protected $headers = [];
+/**
+ * HTTP Response object
+ */
+class Response
+{
+    /**
+     * Response content
+     *
+     * @var string
+     */
+    protected string $content;
 
-    public function __construct($body = '', $statusCode = 200, $headers = []) {
-        $this->body = $body;
-        $this->statusCode = $statusCode;
-        $this->headers = array_merge([
-            'Content-Type' => 'text/html; charset=UTF-8',
-        ], $headers);
+    /**
+     * HTTP status code
+     *
+     * @var int
+     */
+    protected int $status;
+
+    /**
+     * Response headers
+     *
+     * @var array
+     */
+    protected array $headers;
+
+    /**
+     * Create a new response
+     *
+     * @param mixed $content
+     * @param int $status
+     * @param array $headers
+     */
+    public function __construct($content = '', int $status = 200, array $headers = [])
+    {
+        $this->content = (string)$content;
+        $this->status = $status;
+        $this->headers = $headers;
     }
 
-    public function getBody() {
-        return $this->body;
+    /**
+     * Get the content
+     *
+     * @return string
+     */
+    public function getContent(): string
+    {
+        return $this->content;
     }
 
-    public function setBody($body) {
-        $this->body = $body;
+    /**
+     * Set the content
+     *
+     * @param string $content
+     * @return self
+     */
+    public function setContent(string $content): self
+    {
+        $this->content = $content;
         return $this;
     }
 
-    public function getStatusCode() {
-        return $this->statusCode;
+    /**
+     * Get the status code
+     *
+     * @return int
+     */
+    public function getStatus(): int
+    {
+        return $this->status;
     }
 
-    public function setStatusCode($code) {
-        $this->statusCode = $code;
+    /**
+     * Set the status code
+     *
+     * @param int $status
+     * @return self
+     */
+    public function setStatus(int $status): self
+    {
+        $this->status = $status;
         return $this;
     }
 
-    public function getHeaders() {
-        return $this->headers;
+    /**
+     * Get a header
+     *
+     * @param string $name
+     * @return string|null
+     */
+    public function getHeader(string $name): ?string
+    {
+        return $this->headers[$name] ?? null;
     }
 
-    public function setHeader($name, $value) {
+    /**
+     * Set a header
+     *
+     * @param string $name
+     * @param string $value
+     * @return self
+     */
+    public function setHeader(string $name, string $value): self
+    {
         $this->headers[$name] = $value;
         return $this;
     }
 
-    public function json($data, $statusCode = 200) {
-        $this->statusCode = $statusCode;
-        $this->headers['Content-Type'] = 'application/json';
-        $this->body = json_encode($data);
-        return $this;
+    /**
+     * Get all headers
+     *
+     * @return array
+     */
+    public function getHeaders(): array
+    {
+        return $this->headers;
     }
 
-    public function redirect($location, $statusCode = 302) {
-        $this->statusCode = $statusCode;
-        $this->headers['Location'] = $location;
-        return $this;
+    /**
+     * Send the response
+     *
+     * @return void
+     */
+    public function send(): void
+    {
+        // Send status code
+        http_response_code($this->status);
+
+        // Send headers
+        foreach ($this->headers as $name => $value) {
+            header("{$name}: {$value}");
+        }
+
+        // Send content
+        echo $this->content;
+    }
+
+    /**
+     * Convert to string
+     *
+     * @return string
+     */
+    public function __toString(): string
+    {
+        return $this->content;
     }
 }

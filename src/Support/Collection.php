@@ -2,144 +2,213 @@
 
 namespace Framework\Support;
 
-class Collection implements \ArrayAccess, \Countable, \Iterator {
-    protected $items = [];
-    protected $position = 0;
+use ArrayIterator;
+use Countable;
+use IteratorAggregate;
+use JsonSerializable;
 
-    public function __construct($items = []) {
-        $this->items = array_values((array)$items);
+/**
+ * Collection class for working with arrays
+ */
+class Collection implements Countable, IteratorAggregate, JsonSerializable
+{
+    /**
+     * Items in the collection
+     *
+     * @var array
+     */
+    protected array $items;
+
+    /**
+     * Create a new collection
+     *
+     * @param array $items
+     */
+    public function __construct(array $items = [])
+    {
+        $this->items = array_values($items);
     }
 
-    public function all() {
-        return $this->items;
+    /**
+     * Get an item by key
+     *
+     * @param int|string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function get($key, $default = null)
+    {
+        return $this->items[$key] ?? $default;
     }
 
-    public function count(): int {
-        return count($this->items);
-    }
-
-    public function push($item) {
+    /**
+     * Add an item to the collection
+     *
+     * @param mixed $item
+     * @return self
+     */
+    public function add($item): self
+    {
         $this->items[] = $item;
         return $this;
     }
 
-    public function pop() {
-        return array_pop($this->items);
+    /**
+     * Remove an item by key
+     *
+     * @param int|string $key
+     * @return mixed
+     */
+    public function forget($key)
+    {
+        $item = $this->items[$key] ?? null;
+        unset($this->items[$key]);
+        return $item;
     }
 
-    public function shift() {
-        return array_shift($this->items);
+    /**
+     * Filter items
+     *
+     * @param callable $callback
+     * @return self
+     */
+    public function filter(callable $callback): self
+    {
+        $items = array_filter($this->items, $callback, ARRAY_FILTER_USE_BOTH);
+        return new static($items);
     }
 
-    public function unshift($item) {
-        array_unshift($this->items, $item);
-        return $this;
+    /**
+     * Map over items
+     *
+     * @param callable $callback
+     * @return self
+     */
+    public function map(callable $callback): self
+    {
+        $items = array_map($callback, $this->items);
+        return new static($items);
     }
 
-    public function map($callback) {
-        return new static(array_map($callback, $this->items));
-    }
-
-    public function filter($callback) {
-        return new static(array_filter($this->items, $callback));
-    }
-
-    public function reduce($callback, $initial = null) {
+    /**
+     * Reduce items
+     *
+     * @param callable $callback
+     * @param mixed $initial
+     * @return mixed
+     */
+    public function reduce(callable $callback, $initial = null)
+    {
         return array_reduce($this->items, $callback, $initial);
     }
 
-    public function first($default = null) {
-        return $this->items[0] ?? $default;
+    /**
+     * Get all items
+     *
+     * @return array
+     */
+    public function all(): array
+    {
+        return $this->items;
     }
 
-    public function last($default = null) {
-        return end($this->items) ?: $default;
+    /**
+     * Count items
+     *
+     * @return int
+     */
+    public function count(): int
+    {
+        return count($this->items);
     }
 
-    public function pluck($key) {
-        return new static(array_column($this->items, $key));
+    /**
+     * Get iterator
+     *
+     * @return ArrayIterator
+     */
+    public function getIterator(): ArrayIterator
+    {
+        return new ArrayIterator($this->items);
     }
 
-    public function unique($key = null) {
-        if ($key === null) {
-            return new static(array_unique($this->items));
-        }
+    /**
+     * Convert to JSON
+     *
+     * @return array
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->items;
+    }
 
-        $unique = [];
-        $values = [];
+    /**
+     * Convert to array
+     *
+     * @return array
+     */
+    public function toArray(): array
+    {
+        return $this->items;
+    }
 
+    /**
+     * Check if empty
+     *
+     * @return bool
+     */
+    public function isEmpty(): bool
+    {
+        return count($this->items) === 0;
+    }
+
+    /**
+     * Get first item
+     *
+     * @return mixed
+     */
+    public function first()
+    {
+        return $this->items[0] ?? null;
+    }
+
+    /**
+     * Get last item
+     *
+     * @return mixed
+     */
+    public function last()
+    {
+        return end($this->items) ?: null;
+    }
+
+    /**
+     * Pluck values from items
+     *
+     * @param string $key
+     * @return self
+     */
+    public function pluck(string $key): self
+    {
+        $items = array_map(function ($item) use ($key) {
+            return is_array($item) ? $item[$key] ?? null : $item->$key ?? null;
+        }, $this->items);
+        return new static($items);
+    }
+
+    /**
+     * Group items
+     *
+     * @param callable $callback
+     * @return array
+     */
+    public function groupBy(callable $callback): array
+    {
+        $groups = [];
         foreach ($this->items as $item) {
-            $value = is_array($item) ? $item[$key] : $item->$key;
-
-            if (!in_array($value, $values)) {
-                $values[] = $value;
-                $unique[] = $item;
-            }
+            $key = $callback($item);
+            $groups[$key][] = $item;
         }
-
-        return new static($unique);
-    }
-
-    public function chunk($size) {
-        return new static(array_chunk($this->items, $size));
-    }
-
-    public function reverse() {
-        return new static(array_reverse($this->items));
-    }
-
-    public function sort() {
-        sort($this->items);
-        return $this;
-    }
-
-    public function sortBy($key) {
-        usort($this->items, function ($a, $b) use ($key) {
-            $aValue = is_array($a) ? $a[$key] : $a->$key;
-            $bValue = is_array($b) ? $b[$key] : $b->$key;
-            return $aValue <=> $bValue;
-        });
-
-        return $this;
-    }
-
-    public function offsetExists($offset): bool {
-        return isset($this->items[$offset]);
-    }
-
-    public function offsetGet($offset): mixed {
-        return $this->items[$offset] ?? null;
-    }
-
-    public function offsetSet($offset, $value): void {
-        if ($offset === null) {
-            $this->items[] = $value;
-        } else {
-            $this->items[$offset] = $value;
-        }
-    }
-
-    public function offsetUnset($offset): void {
-        unset($this->items[$offset]);
-    }
-
-    public function current(): mixed {
-        return $this->items[$this->position] ?? null;
-    }
-
-    public function key(): mixed {
-        return $this->position;
-    }
-
-    public function next(): void {
-        $this->position++;
-    }
-
-    public function rewind(): void {
-        $this->position = 0;
-    }
-
-    public function valid(): bool {
-        return isset($this->items[$this->position]);
+        return $groups;
     }
 }

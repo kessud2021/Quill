@@ -5,9 +5,9 @@ namespace Framework\Console\Commands;
 use Framework\Console\Command;
 
 /**
- * Migrate command - run database migrations
+ * Migrate rollback command
  */
-class MigrateCommand extends Command
+class MigrateRollbackCommand extends Command
 {
     /**
      * Handle the command
@@ -17,7 +17,7 @@ class MigrateCommand extends Command
      */
     public function handle(array $arguments): int
     {
-        $this->info('Running migrations...');
+        $this->info('Rolling back migrations...');
 
         $migrationsPath = database_path('migrations');
 
@@ -26,10 +26,10 @@ class MigrateCommand extends Command
             return 1;
         }
 
-        $files = glob($migrationsPath . '/*.php');
+        $files = array_reverse(glob($migrationsPath . '/*.php'));
 
         if (empty($files)) {
-            $this->info('No migrations to run');
+            $this->info('No migrations to rollback');
             return 0;
         }
 
@@ -39,14 +39,14 @@ class MigrateCommand extends Command
 
             if (class_exists($className)) {
                 $migration = new $className();
-                if (method_exists($migration, 'up')) {
-                    $migration->up();
-                    $this->info("Migrated: " . basename($file));
+                if (method_exists($migration, 'down')) {
+                    $migration->down();
+                    $this->info("Rolled back: " . basename($file));
                 }
             }
         }
 
-        $this->info('Migrations completed');
+        $this->info('Rollback completed');
         return 0;
     }
 

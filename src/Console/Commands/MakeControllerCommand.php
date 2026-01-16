@@ -2,43 +2,129 @@
 
 namespace Framework\Console\Commands;
 
-class MakeControllerCommand extends Command {
-    protected $signature = 'make:controller';
-    protected $description = 'Create a new controller class';
+use Framework\Console\Command;
 
-    public function handle($args) {
-        if (empty($args)) {
-            $this->error('Please provide a controller name');
+/**
+ * Make controller command
+ */
+class MakeControllerCommand extends Command
+{
+    /**
+     * Handle the command
+     *
+     * @param array $arguments
+     * @return int
+     */
+    public function handle(array $arguments): int
+    {
+        if (empty($arguments[0])) {
+            $this->error('Controller name required');
             return 1;
         }
 
-        $name = $args[0];
-        $path = APP_PATH . '/Controllers/' . $name . '.php';
+        $name = $arguments[0];
+        $controllersPath = app_path('Controllers');
 
-        if (file_exists($path)) {
-            $this->error("Controller already exists: $name");
+        if (!is_dir($controllersPath)) {
+            mkdir($controllersPath, 0755, true);
+        }
+
+        $file = $controllersPath . '/' . $name . '.php';
+
+        if (file_exists($file)) {
+            $this->error("Controller already exists: {$name}");
             return 1;
         }
 
-        $namespace = 'App\\Controllers';
-        $class = basename($name);
+        $stub = $this->getStub($name);
+        file_put_contents($file, $stub);
 
-        $stub = <<<PHP
+        $this->info("Created controller: {$name}");
+        return 0;
+    }
+
+    /**
+     * Get stub
+     *
+     * @param string $name
+     * @return string
+     */
+    protected function getStub(string $name): string
+    {
+        return <<<PHP
 <?php
 
-namespace $namespace;
+namespace App\Controllers;
 
-class $class {
-    public function index() {
-        return view('index');
+use Framework\Foundation\Controller;
+use Framework\Http\Request;
+
+class {$name} extends Controller
+{
+    /**
+     * Constructor
+     */
+    public function __construct()
+    {
+        parent::__construct();
+    }
+
+    /**
+     * Display a listing
+     */
+    public function index()
+    {
+        return response('Index action');
+    }
+
+    /**
+     * Show create form
+     */
+    public function create()
+    {
+        return response('Create action');
+    }
+
+    /**
+     * Store a new record
+     */
+    public function store(Request \$request)
+    {
+        return response('Store action');
+    }
+
+    /**
+     * Show a record
+     */
+    public function show(\$id)
+    {
+        return response('Show action for ID: ' . \$id);
+    }
+
+    /**
+     * Show edit form
+     */
+    public function edit(\$id)
+    {
+        return response('Edit action');
+    }
+
+    /**
+     * Update a record
+     */
+    public function update(Request \$request, \$id)
+    {
+        return response('Update action');
+    }
+
+    /**
+     * Delete a record
+     */
+    public function destroy(\$id)
+    {
+        return response('Delete action');
     }
 }
 PHP;
-
-        @mkdir(dirname($path), 0755, true);
-        file_put_contents($path, $stub);
-
-        $this->info("Controller created: $name");
-        return 0;
     }
 }

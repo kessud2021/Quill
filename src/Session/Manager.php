@@ -2,64 +2,175 @@
 
 namespace Framework\Session;
 
-class Manager {
-    protected $sessionPath;
-    protected $sessionName = 'FRAMEWORK_SESSION';
+/**
+ * Session manager
+ */
+class Manager
+{
+    /**
+     * Session started flag
+     *
+     * @var bool
+     */
+    protected bool $started = false;
 
-    public function __construct($config = []) {
-        $this->sessionPath = $config['path'] ?? STORAGE_PATH . '/sessions';
+    /**
+     * Session data
+     *
+     * @var array
+     */
+    protected array $data = [];
 
-        if (!is_dir($this->sessionPath)) {
-            mkdir($this->sessionPath, 0755, true);
+    /**
+     * Create a new session manager
+     */
+    public function __construct()
+    {
+        $this->start();
+    }
+
+    /**
+     * Start the session
+     *
+     * @return void
+     */
+    public function start(): void
+    {
+        if (!$this->started) {
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            $this->data = $_SESSION;
+            $this->started = true;
+        }
+    }
+
+    /**
+     * Get a session value
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function get(string $key, $default = null)
+    {
+        $keys = explode('.', $key);
+        $value = $_SESSION;
+
+        foreach ($keys as $segment) {
+            if (is_array($value) && array_key_exists($segment, $value)) {
+                $value = $value[$segment];
+            } else {
+                return $default;
+            }
         }
 
-        ini_set('session.save_path', $this->sessionPath);
-        ini_set('session.name', $this->sessionName);
-
-        session_start();
+        return $value;
     }
 
-    public function all() {
-        return $_SESSION;
+    /**
+     * Put a value in the session
+     *
+     * @param string $key
+     * @param mixed $value
+     * @return void
+     */
+    public function put(string $key, $value): void
+    {
+        $keys = explode('.', $key);
+        $current = &$_SESSION;
+
+        foreach ($keys as $i => $segment) {
+            if ($i === count($keys) - 1) {
+                $current[$segment] = $value;
+            } else {
+                if (!isset($current[$segment])) {
+                    $current[$segment] = [];
+                }
+                $current = &$current[$segment];
+            }
+        }
+
+        $this->data = $_SESSION;
     }
 
-    public function get($key, $default = null) {
-        return $_SESSION[$key] ?? $default;
+    /**
+     * Push a value onto a session array
+     *
+     * @param string $key
+     * @param mixed $value
+     * @return void
+     */
+    public function push(string $key, $value): void
+    {
+        $current = $this->get($key, []);
+
+        if (!is_array($current)) {
+            $current = [];
+        }
+
+        $current[] = $value;
+        $this->put($key, $current);
     }
 
-    public function has($key) {
-        return isset($_SESSION[$key]);
+    /**
+     * Remove a value from the session
+     *
+     * @param string $key
+     * @return mixed
+     */
+    public function forget(string $key)
+    {
+        $keys = explode('.', $key);
+        $value = null;
+        $current = &$_SESSION;
+
+        foreach ($keys as $i => $segment) {
+            if ($i === count($keys) - 1) {
+                $value = $current[$segment] ?? null;
+                unset($current[$segment]);
+            } else {
+                if (isset($current[$segment])) {
+                    $current = &$current[$segment];
+                } else {
+                    break;
+                }
+            }
+        }
+
+        $this->data = $_SESSION;
+        return $value;
     }
 
-    public function put($key, $value) {
-        $_SESSION[$key] = $value;
-        return $this;
-    }
-
-    public function forget($key) {
-        unset($_SESSION[$key]);
-        return $this;
-    }
-
-    public function flush() {
+    /**
+     * Flush all session data
+     *
+     * @return void
+     */
+    public function flush(): void
+    {
         $_SESSION = [];
-        return $this;
+        $this->data = [];
     }
 
-    public function regenerate() {
-        session_regenerate_id(true);
-        return $this;
+    /**
+     * Check if a session key exists
+     *
+     * @param string $key
+     * @return bool
+     */
+    public function has(string $key): bool
+    {
+        return $this->get($key) !== null;
     }
 
-    public function getToken() {
-        if (!isset($_SESSION['_token'])) {
-            $_SESSION['_token'] = bin2hex(random_bytes(32));
-        }
-
-        return $_SESSION['_token'];
-    }
-
-    public function destroy() {
-        session_destroy();
+    /**
+     * Get all session data
+     *
+     * @return array
+     */
+    public function all(): array
+    {
+        return $_SESSION;
     }
 }

@@ -1,19 +1,26 @@
 <?php
 
-$router = app('router');
+/**
+ * Web Routes
+ * 
+ * All web routes are registered here
+ */
 
-$router->get('/', 'App\Controllers\HomeController@index')->name('home');
+$router = app(\Framework\Routing\Router::class);
 
-$router->get('/login', 'App\Controllers\AuthController@login')->name('login');
-$router->post('/login', 'App\Controllers\AuthController@postLogin');
-$router->get('/register', 'App\Controllers\AuthController@register')->name('register');
-$router->post('/register', 'App\Controllers\AuthController@postRegister');
-$router->get('/logout', 'App\Controllers\AuthController@logout')->name('logout');
+// Home route
+$router->get('/', 'App\\Controllers\\HomeController@index')->name('home');
 
-$router->group(['prefix' => 'api'], function ($router) {
-    $router->get('/users', 'App\Controllers\Api\UserController@index');
-    $router->post('/users', 'App\Controllers\Api\UserController@store');
-    $router->get('/users/{id}', 'App\Controllers\Api\UserController@show');
-    $router->put('/users/{id}', 'App\Controllers\Api\UserController@update');
-    $router->delete('/users/{id}', 'App\Controllers\Api\UserController@destroy');
-});
+// Example resource route
+// $router->resource('posts', 'App\\Controllers\\PostController');
+
+// Example route group
+// $router->group(['prefix' => 'api', 'middleware' => ['api']], function ($router) {
+//     $router->get('/users', 'App\\Controllers\\Api\\UserController@index');
+//     $router->post('/users', 'App\\Controllers\\Api\\UserController@store');
+// });
+
+// Example protected route
+// $router->get('/dashboard', 'App\\Controllers\\DashboardController@index')
+//     ->name('dashboard')
+//     ->middleware('auth');

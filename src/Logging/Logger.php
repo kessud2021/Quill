@@ -2,77 +2,185 @@
 
 namespace Framework\Logging;
 
-class Logger {
-    protected $config;
-    protected $channel;
+/**
+ * File-based structured logger
+ */
+class Logger
+{
+    /**
+     * Log file path
+     *
+     * @var string
+     */
+    protected string $path;
 
-    public function __construct($config = []) {
-        $this->config = $config;
-        $this->channel = $config['default'] ?? 'stack';
+    /**
+     * Log levels
+     *
+     * @var array
+     */
+    protected array $levels = ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'];
+
+    /**
+     * Create a new logger
+     *
+     * @param string $path
+     */
+    public function __construct(string $path = '')
+    {
+        $this->path = $path ?: storage_path('logs/app.log');
+        $this->ensureLogDirectory();
     }
 
-    public function debug($message, $context = []) {
-        $this->log('debug', $message, $context);
+    /**
+     * Ensure log directory exists
+     *
+     * @return void
+     */
+    protected function ensureLogDirectory(): void
+    {
+        $dir = dirname($this->path);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
     }
 
-    public function info($message, $context = []) {
-        $this->log('info', $message, $context);
+    /**
+     * Log a debug message
+     *
+     * @param string $message
+     * @param array $context
+     * @return void
+     */
+    public function debug(string $message, array $context = []): void
+    {
+        $this->log('DEBUG', $message, $context);
     }
 
-    public function warning($message, $context = []) {
-        $this->log('warning', $message, $context);
+    /**
+     * Log an info message
+     *
+     * @param string $message
+     * @param array $context
+     * @return void
+     */
+    public function info(string $message, array $context = []): void
+    {
+        $this->log('INFO', $message, $context);
     }
 
-    public function error($message, $context = []) {
-        $this->log('error', $message, $context);
+    /**
+     * Log a notice message
+     *
+     * @param string $message
+     * @param array $context
+     * @return void
+     */
+    public function notice(string $message, array $context = []): void
+    {
+        $this->log('NOTICE', $message, $context);
     }
 
-    public function critical($message, $context = []) {
-        $this->log('critical', $message, $context);
+    /**
+     * Log a warning message
+     *
+     * @param string $message
+     * @param array $context
+     * @return void
+     */
+    public function warning(string $message, array $context = []): void
+    {
+        $this->log('WARNING', $message, $context);
     }
 
-    public function log($level, $message, $context = []) {
-        $log = $this->formatLog($level, $message, $context);
-
-        $this->writeLog($log);
-        $this->writeStructuredLog($level, $message, $context);
+    /**
+     * Log an error message
+     *
+     * @param string $message
+     * @param array $context
+     * @return void
+     */
+    public function error(string $message, array $context = []): void
+    {
+        $this->log('ERROR', $message, $context);
     }
 
-    protected function formatLog($level, $message, $context) {
+    /**
+     * Log a critical message
+     *
+     * @param string $message
+     * @param array $context
+     * @return void
+     */
+    public function critical(string $message, array $context = []): void
+    {
+        $this->log('CRITICAL', $message, $context);
+    }
+
+    /**
+     * Log an alert message
+     *
+     * @param string $message
+     * @param array $context
+     * @return void
+     */
+    public function alert(string $message, array $context = []): void
+    {
+        $this->log('ALERT', $message, $context);
+    }
+
+    /**
+     * Log an emergency message
+     *
+     * @param string $message
+     * @param array $context
+     * @return void
+     */
+    public function emergency(string $message, array $context = []): void
+    {
+        $this->log('EMERGENCY', $message, $context);
+    }
+
+    /**
+     * Log a message
+     *
+     * @param string $level
+     * @param string $message
+     * @param array $context
+     * @return void
+     */
+    protected function log(string $level, string $message, array $context = []): void
+    {
         $timestamp = date('Y-m-d H:i:s');
-        $contextString = !empty($context) ? ' ' . json_encode($context) : '';
+        $contextStr = !empty($context) ? ' ' . json_encode($context) : '';
+        $entry = "[{$timestamp}] [{$level}] {$message}{$contextStr}" . PHP_EOL;
 
-        return "[$timestamp] $level: $message$contextString" . PHP_EOL;
+        file_put_contents($this->path, $entry, FILE_APPEND);
     }
 
-    protected function writeLog($log) {
-        $path = STORAGE_PATH . '/logs';
-
-        if (!is_dir($path)) {
-            mkdir($path, 0755, true);
+    /**
+     * Get log contents
+     *
+     * @return string
+     */
+    public function getContents(): string
+    {
+        if (!file_exists($this->path)) {
+            return '';
         }
 
-        $file = $path . '/' . date('Y-m-d') . '.log';
-
-        file_put_contents($file, $log, FILE_APPEND);
+        return file_get_contents($this->path);
     }
 
-    protected function writeStructuredLog($level, $message, $context) {
-        $path = STORAGE_PATH . '/logs';
-
-        if (!is_dir($path)) {
-            mkdir($path, 0755, true);
+    /**
+     * Clear log file
+     *
+     * @return void
+     */
+    public function clear(): void
+    {
+        if (file_exists($this->path)) {
+            file_put_contents($this->path, '');
         }
-
-        $file = $path . '/' . date('Y-m-d') . '.json';
-
-        $entry = json_encode([
-            'timestamp' => date('Y-m-d H:i:s'),
-            'level' => $level,
-            'message' => $message,
-            'context' => $context,
-        ]) . PHP_EOL;
-
-        file_put_contents($file, $entry, FILE_APPEND);
     }
 }

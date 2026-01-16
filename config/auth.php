@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'default' => env('AUTH_DRIVER', 'session'),
+    'default' => env('AUTH_GUARD', 'web'),
 
     'guards' => [
         'web' => [
@@ -17,7 +17,9 @@ return [
 
     'providers' => [
         'users' => [
-            'model' => \App\Models\User::class,
+            'driver' => 'database',
+            'model' => 'App\\Models\\User',
+            'table' => 'users',
         ],
     ],
 

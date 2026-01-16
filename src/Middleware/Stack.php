@@ -2,36 +2,89 @@
 
 namespace Framework\Middleware;
 
-class Stack {
-    protected $middleware = [];
+use Framework\Http\Request;
+use Framework\Http\Response;
 
-    public function push($middleware) {
+/**
+ * Middleware pipeline/stack
+ */
+class Stack
+{
+    /**
+     * Middleware stack
+     *
+     * @var array
+     */
+    protected array $middleware = [];
+
+    /**
+     * Final handler
+     *
+     * @var callable|null
+     */
+    protected $finalHandler = null;
+
+    /**
+     * Add middleware to the stack
+     *
+     * @param string|callable $middleware
+     * @return self
+     */
+    public function add($middleware): self
+    {
         $this->middleware[] = $middleware;
         return $this;
     }
 
-    public function resolve($request, $next) {
-        if (empty($this->middleware)) {
-            return $next($request);
-        }
-
-        $this->middleware = array_reverse($this->middleware);
-
-        $pipeline = function ($request) use ($next) {
-            return $next($request);
-        };
-
-        foreach ($this->middleware as $middleware) {
-            $pipeline = $this->createMiddlewarePipeline($middleware, $pipeline);
-        }
-
-        return $pipeline($request);
+    /**
+     * Set the final handler
+     *
+     * @param callable $handler
+     * @return self
+     */
+    public function then(callable $handler): self
+    {
+        $this->finalHandler = $handler;
+        return $this;
     }
 
-    protected function createMiddlewarePipeline($middleware, $next) {
-        return function ($request) use ($middleware, $next) {
+    /**
+     * Execute the middleware stack
+     *
+     * @param Request $request
+     * @return Response
+     */
+    public function execute(Request $request): Response
+    {
+        $middlewares = array_reverse($this->middleware);
+
+        $next = $this->finalHandler ?? function ($request) {
+            return new Response('No handler defined');
+        };
+
+        foreach ($middlewares as $middleware) {
+            $next = $this->wrap($middleware, $next);
+        }
+
+        return $next($request);
+    }
+
+    /**
+     * Wrap a middleware
+     *
+     * @param string|callable $middleware
+     * @param callable $next
+     * @return callable
+     */
+    protected function wrap($middleware, callable $next): callable
+    {
+        return function (Request $request) use ($middleware, $next) {
             if (is_string($middleware)) {
                 $middleware = app($middleware);
+            }
+
+            if (is_callable($middleware)) {
+                return $middleware($request, $next);
             }
 
             if (method_exists($middleware, 'handle')) {

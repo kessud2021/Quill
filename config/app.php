@@ -1,13 +1,19 @@
 <?php
 
 return [
-    'name' => env('APP_NAME', 'Framework'),
-    'env' => env('APP_ENV', 'production'),
+    'name' => env('APP_NAME', 'Quill'),
+    'env' => env('APP_ENV', 'local'),
     'debug' => env('APP_DEBUG', false),
     'url' => env('APP_URL', 'http://localhost:8000'),
 
+    'timezone' => 'UTC',
+    'charset' => 'UTF-8',
+
     'providers' => [
-        \App\Providers\AppServiceProvider::class,
-        \App\Providers\DatabaseServiceProvider::class,
+        // Service providers
+    ],
+
+    'aliases' => [
+        // Class aliases
     ],
 ];

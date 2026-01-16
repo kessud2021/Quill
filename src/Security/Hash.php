@@ -2,20 +2,42 @@
 
 namespace Framework\Security;
 
-class Hash {
-    public static function make($password, $options = []) {
-        return password_hash($password, PASSWORD_BCRYPT, [
-            'cost' => $options['rounds'] ?? 10,
-        ]);
+/**
+ * Password hashing using bcrypt
+ */
+class Hash
+{
+    /**
+     * Hash a password
+     *
+     * @param string $password
+     * @return string
+     */
+    public static function make(string $password): string
+    {
+        return password_hash($password, PASSWORD_BCRYPT);
     }
 
-    public static function check($password, $hash) {
+    /**
+     * Verify a password
+     *
+     * @param string $password
+     * @param string $hash
+     * @return bool
+     */
+    public static function check(string $password, string $hash): bool
+    {
         return password_verify($password, $hash);
     }
 
-    public static function needsRehash($hash, $options = []) {
-        return password_needs_rehash($hash, PASSWORD_BCRYPT, [
-            'cost' => $options['rounds'] ?? 10,
-        ]);
+    /**
+     * Check if a hash needs to be rehashed
+     *
+     * @param string $hash
+     * @return bool
+     */
+    public static function needsRehash(string $hash): bool
+    {
+        return password_needs_rehash($hash, PASSWORD_BCRYPT);
     }
 }

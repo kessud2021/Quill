@@ -2,129 +2,198 @@
 
 namespace Framework\View;
 
-class BladeCompiler {
-    protected $content;
+/**
+ * Blade template compiler
+ * 
+ * Compiles Blade syntax to PHP
+ */
+class BladeCompiler
+{
+    /**
+     * Compile blade template
+     *
+     * @param string $content
+     * @return string
+     */
+    public function compile(string $content): string
+    {
+        // Compile directives
+        $content = $this->compileDirectives($content);
+        $content = $this->compileEchos($content);
+        $content = $this->compileLoops($content);
+        $content = $this->compileConditionals($content);
+        $content = $this->compileIncludes($content);
 
-    public function compile($content) {
-        $this->content = $content;
-
-        $this->compileIncludes();
-        $this->compileLayouts();
-        $this->compileComponents();
-        $this->compileEchos();
-        $this->compileStatements();
-
-        return $this->content;
+        return $content;
     }
 
-    protected function compileIncludes() {
-        $this->content = preg_replace_callback(
-            '/@include\([\'"]([^\'"]+)[\'"]\)/',
-            function ($matches) {
-                $view = str_replace('.', '/', $matches[1]);
-                $path = RESOURCES_PATH . '/views/' . $view . '.blade.php';
-                if (file_exists($path)) {
-                    return '<?php include "' . $path . '"; ?>';
-                }
-                return '';
-            },
-            $this->content
+    /**
+     * Compile blade directives
+     *
+     * @param string $content
+     * @return string
+     */
+    protected function compileDirectives(string $content): string
+    {
+        // @csrf
+        $content = str_replace('@csrf', '<?php echo csrf_field(); ?>', $content);
+
+        // @auth
+        $content = preg_replace(
+            '/@auth\s*/',
+            '<?php if (auth()->check()): ?>',
+            $content
         );
-    }
 
-    protected function compileLayouts() {
-        $this->content = preg_replace_callback(
-            '/@extends\([\'"]([^\'"]+)[\'"]\)/',
-            function ($matches) {
-                return '<?php $__layout = "' . $matches[1] . '"; ?>';
-            },
-            $this->content
+        // @endauth
+        $content = str_replace('@endauth', '<?php endif; ?>', $content);
+
+        // @guest
+        $content = preg_replace(
+            '/@guest\s*/',
+            '<?php if (!auth()->check()): ?>',
+            $content
         );
+
+        // @endguest
+        $content = str_replace('@endguest', '<?php endif; ?>', $content);
+
+        return $content;
     }
 
-    protected function compileComponents() {
-        $this->content = preg_replace_callback(
-            '/@component\([\'"]([^\'"]+)[\'"]\s*,\s*\$([a-zA-Z_]\w*)\)/',
-            function ($matches) {
-                return '<?php extract($' . $matches[2] . '); include "' . RESOURCES_PATH . '/views/components/' . str_replace('.', '/', $matches[1]) . '.blade.php"; ?>';
-            },
-            $this->content
-        );
-    }
-
-    protected function compileEchos() {
-        $this->content = preg_replace_callback(
+    /**
+     * Compile echo statements
+     *
+     * @param string $content
+     * @return string
+     */
+    protected function compileEchos(string $content): string
+    {
+        // {{ $variable }}
+        $content = preg_replace_callback(
             '/\{\{\s*(.+?)\s*\}\}/',
             function ($matches) {
-                $expression = $matches[1];
-                return '<?php echo htmlspecialchars(' . $expression . ', ENT_QUOTES, "UTF-8"); ?>';
+                return '<?php echo htmlspecialchars(' . $matches[1] . ', ENT_QUOTES, "UTF-8"); ?>';
             },
-            $this->content
+            $content
         );
 
-        $this->content = preg_replace_callback(
+        // {!! $html !!}
+        $content = preg_replace_callback(
             '/\{!!\s*(.+?)\s*!!\}/',
             function ($matches) {
                 return '<?php echo ' . $matches[1] . '; ?>';
             },
-            $this->content
-        );
-    }
-
-    protected function compileStatements() {
-        $this->compileLoops();
-        $this->compileConditions();
-        $this->compileAuthentication();
-    }
-
-    protected function compileLoops() {
-        $this->content = preg_replace_callback(
-            '/@foreach\s*\(\s*(.+?)\s+as\s+(.+?)\s*\)/',
-            function ($matches) {
-                return '<?php foreach (' . $matches[1] . ' as ' . $matches[2] . '): ?>';
-            },
-            $this->content
+            $content
         );
 
-        $this->content = preg_replace('/@endforeach/', '<?php endforeach; ?>', $this->content);
-
-        $this->content = preg_replace_callback(
-            '/@forelse\s*\(\s*(.+?)\s+as\s+(.+?)\s*\)/',
-            function ($matches) {
-                return '<?php if (' . $matches[1] . '): foreach (' . $matches[1] . ' as ' . $matches[2] . '): ?>';
-            },
-            $this->content
-        );
-
-        $this->content = preg_replace('/@empty/', '<?php endforeach; else: ?>', $this->content);
-        $this->content = preg_replace('/@endforelse/', '<?php endif; ?>', $this->content);
+        return $content;
     }
 
-    protected function compileConditions() {
-        $this->content = preg_replace_callback(
+    /**
+     * Compile loops
+     *
+     * @param string $content
+     * @return string
+     */
+    protected function compileLoops(string $content): string
+    {
+        // @foreach
+        $content = preg_replace(
+            '/@foreach\s*\(\s*\$(.+?)\s+as\s+\$(.+?)\s*\)/',
+            '<?php foreach ($\1 as $\2): ?>',
+            $content
+        );
+
+        // @endforeach
+        $content = str_replace('@endforeach', '<?php endforeach; ?>', $content);
+
+        // @for
+        $content = preg_replace(
+            '/@for\s*\(\s*(.+?)\s*\)/',
+            '<?php for (\1): ?>',
+            $content
+        );
+
+        // @endfor
+        $content = str_replace('@endfor', '<?php endfor; ?>', $content);
+
+        // @while
+        $content = preg_replace(
+            '/@while\s*\(\s*(.+?)\s*\)/',
+            '<?php while (\1): ?>',
+            $content
+        );
+
+        // @endwhile
+        $content = str_replace('@endwhile', '<?php endwhile; ?>', $content);
+
+        return $content;
+    }
+
+    /**
+     * Compile conditionals
+     *
+     * @param string $content
+     * @return string
+     */
+    protected function compileConditionals(string $content): string
+    {
+        // @if
+        $content = preg_replace(
             '/@if\s*\(\s*(.+?)\s*\)/',
-            function ($matches) {
-                return '<?php if (' . $matches[1] . '): ?>';
-            },
-            $this->content
+            '<?php if (\1): ?>',
+            $content
         );
 
-        $this->content = preg_replace_callback(
+        // @elseif
+        $content = preg_replace(
             '/@elseif\s*\(\s*(.+?)\s*\)/',
-            function ($matches) {
-                return '<?php elseif (' . $matches[1] . '): ?>';
-            },
-            $this->content
+            '<?php elseif (\1): ?>',
+            $content
         );
 
-        $this->content = preg_replace('/@else/', '<?php else: ?>', $this->content);
-        $this->content = preg_replace('/@endif/', '<?php endif; ?>', $this->content);
+        // @else
+        $content = str_replace('@else', '<?php else: ?>', $content);
+
+        // @endif
+        $content = str_replace('@endif', '<?php endif; ?>', $content);
+
+        // @unless
+        $content = preg_replace(
+            '/@unless\s*\(\s*(.+?)\s*\)/',
+            '<?php if (!\1): ?>',
+            $content
+        );
+
+        // @endunless
+        $content = str_replace('@endunless', '<?php endif; ?>', $content);
+
+        return $content;
     }
 
-    protected function compileAuthentication() {
-        $this->content = preg_replace('/@auth/', '<?php if (auth()->check()): ?>', $this->content);
-        $this->content = preg_replace('/@endauth/', '<?php endif; ?>', $this->content);
-        $this->content = preg_replace('/@guest/', '<?php if (!auth()->check()): ?>', $this->content);
-        $this->content = preg_replace('/@endguest/', '<?php endif; ?>', $this->content);
+    /**
+     * Compile includes
+     *
+     * @param string $content
+     * @return string
+     */
+    protected function compileIncludes(string $content): string
+    {
+        // @include('view.name')
+        $content = preg_replace(
+            '/@include\(\s*[\'"](.+?)[\'"]\s*\)/',
+            '<?php echo view("\1", get_defined_vars())->render(); ?>',
+            $content
+        );
+
+        // @include('view.name', ['data' => $value])
+        $content = preg_replace(
+            '/@include\(\s*[\'"](.+?)[\'"],\s*(\[.+?\])\s*\)/',
+            '<?php echo view("\1", array_merge(get_defined_vars(), \2))->render(); ?>',
+            $content
+        );
+
+        return $content;
     }
 }

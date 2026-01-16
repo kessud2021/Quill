@@ -2,42 +2,68 @@
 
 namespace Framework\Console\Commands;
 
-class SeedCommand extends Command {
-    protected $signature = 'seed';
-    protected $description = 'Seed the database with initial data';
+use Framework\Console\Command;
 
-    public function handle($args) {
-        $seedsPath = DATABASE_PATH . '/seeds';
+/**
+ * Seed command - seed database with data
+ */
+class SeedCommand extends Command
+{
+    /**
+     * Handle the command
+     *
+     * @param array $arguments
+     * @return int
+     */
+    public function handle(array $arguments): int
+    {
+        $this->info('Seeding database...');
 
-        if (!is_dir($seedsPath)) {
-            $this->warn('No seeds directory found');
-            return 0;
+        $seedersPath = database_path('seeders');
+
+        if (!is_dir($seedersPath)) {
+            $this->error('Seeders directory not found');
+            return 1;
         }
 
-        $files = glob($seedsPath . '/*.php');
+        $files = glob($seedersPath . '/*.php');
 
         if (empty($files)) {
-            $this->info('No seeds to run');
+            $this->info('No seeders found');
             return 0;
         }
 
         foreach ($files as $file) {
-            $className = basename($file, '.php');
+            require $file;
+            $className = $this->getClassNameFromFile($file);
 
-            try {
-                include $file;
-                $class = "Database\\Seeds\\$className";
-
-                if (class_exists($class)) {
-                    $seeder = new $class();
+            if (class_exists($className)) {
+                $seeder = new $className();
+                if (method_exists($seeder, 'run')) {
                     $seeder->run();
-                    $this->info("Seeded: $className");
+                    $this->info("Seeded: " . basename($file));
                 }
-            } catch (\Exception $e) {
-                $this->error("Failed to seed $className: " . $e->getMessage());
             }
         }
 
+        $this->info('Seeding completed');
         return 0;
+    }
+
+    /**
+     * Get class name from file
+     *
+     * @param string $file
+     * @return string
+     */
+    protected function getClassNameFromFile(string $file): string
+    {
+        $content = file_get_contents($file);
+
+        if (preg_match('/class\s+(\w+)/', $content, $matches)) {
+            return $matches[1];
+        }
+
+        return '';
     }
 }

@@ -2,44 +2,53 @@
 
 namespace Framework\Security;
 
-class Csrf {
-    protected $tokenKey = '_token';
+/**
+ * CSRF token management
+ */
+class Csrf
+{
+    /**
+     * Token session key
+     *
+     * @var string
+     */
+    protected string $tokenKey = '_token';
 
-    public function generate() {
-        $token = bin2hex(random_bytes(32));
+    /**
+     * Get or create a CSRF token
+     *
+     * @return string
+     */
+    public function getToken(): string
+    {
+        $session = session();
 
-        if (!isset($_SESSION)) {
-            session_start();
+        if (!$session->has($this->tokenKey)) {
+            $session->put($this->tokenKey, bin2hex(random_bytes(32)));
         }
 
-        $_SESSION[$this->tokenKey] = $token;
-
-        return $token;
+        return $session->get($this->tokenKey);
     }
 
-    public function token() {
-        if (!isset($_SESSION)) {
-            session_start();
-        }
-
-        return $_SESSION[$this->tokenKey] ?? $this->generate();
+    /**
+     * Verify a CSRF token
+     *
+     * @param string $token
+     * @return bool
+     */
+    public function verify(string $token): bool
+    {
+        return hash_equals($this->getToken(), $token);
     }
 
-    public function verify($token) {
-        if (!isset($_SESSION)) {
-            session_start();
-        }
-
-        if (!isset($_SESSION[$this->tokenKey])) {
-            return false;
-        }
-
-        return hash_equals($_SESSION[$this->tokenKey], $token);
-    }
-
-    public function verifyRequest($request) {
-        $token = $request->input($this->tokenKey) ?? $request->getHeader('X-CSRF-Token');
-
-        return $this->verify($token);
+    /**
+     * Regenerate token
+     *
+     * @return string
+     */
+    public function regenerate(): string
+    {
+        session()->forget($this->tokenKey);
+        return $this->getToken();
     }
 }

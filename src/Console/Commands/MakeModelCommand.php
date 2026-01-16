@@ -2,46 +2,92 @@
 
 namespace Framework\Console\Commands;
 
-class MakeModelCommand extends Command {
-    protected $signature = 'make:model';
-    protected $description = 'Create a new model class';
+use Framework\Console\Command;
 
-    public function handle($args) {
-        if (empty($args)) {
-            $this->error('Please provide a model name');
+/**
+ * Make model command
+ */
+class MakeModelCommand extends Command
+{
+    /**
+     * Handle the command
+     *
+     * @param array $arguments
+     * @return int
+     */
+    public function handle(array $arguments): int
+    {
+        if (empty($arguments[0])) {
+            $this->error('Model name required');
             return 1;
         }
 
-        $name = $args[0];
-        $path = APP_PATH . '/Models/' . $name . '.php';
+        $name = $arguments[0];
+        $modelsPath = app_path('Models');
 
-        if (file_exists($path)) {
-            $this->error("Model already exists: $name");
+        if (!is_dir($modelsPath)) {
+            mkdir($modelsPath, 0755, true);
+        }
+
+        $file = $modelsPath . '/' . $name . '.php';
+
+        if (file_exists($file)) {
+            $this->error("Model already exists: {$name}");
             return 1;
         }
 
-        $namespace = 'App\\Models';
-        $class = basename($name);
-        $table = strtolower($class) . 's';
+        $stub = $this->getStub($name);
+        file_put_contents($file, $stub);
 
-        $stub = <<<PHP
+        $this->info("Created model: {$name}");
+        return 0;
+    }
+
+    /**
+     * Get stub
+     *
+     * @param string $name
+     * @return string
+     */
+    protected function getStub(string $name): string
+    {
+        return <<<PHP
 <?php
 
-namespace $namespace;
+namespace App\Models;
 
 use Framework\Database\Model;
 
-class $class extends Model {
-    protected \$table = '$table';
-    protected \$fillable = [];
-    protected \$timestamps = true;
+class {$name} extends Model
+{
+    /**
+     * Table name
+     *
+     * @var string
+     */
+    protected ?string \$table = null;
+
+    /**
+     * Primary key
+     *
+     * @var string
+     */
+    protected string \$primaryKey = 'id';
+
+    /**
+     * Fillable attributes
+     *
+     * @var array
+     */
+    protected array \$fillable = [];
+
+    /**
+     * Soft delete column
+     *
+     * @var string|null
+     */
+    protected ?string \$softDeleteColumn = 'deleted_at';
 }
 PHP;
-
-        @mkdir(dirname($path), 0755, true);
-        file_put_contents($path, $stub);
-
-        $this->info("Model created: $name");
-        return 0;
     }
 }

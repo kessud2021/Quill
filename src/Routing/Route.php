@@ -2,100 +2,205 @@
 
 namespace Framework\Routing;
 
-class Route {
-    protected $method;
-    protected $path;
+/**
+ * Route definition
+ */
+class Route
+{
+    /**
+     * HTTP methods
+     *
+     * @var array
+     */
+    protected array $methods;
+
+    /**
+     * Route path
+     *
+     * @var string
+     */
+    protected string $path;
+
+    /**
+     * Route action
+     *
+     * @var callable|string|array
+     */
     protected $action;
-    protected $controller;
-    protected $controllerMethod;
-    protected $parameters = [];
-    protected $middleware = [];
-    protected $name;
-    protected $pattern = '/\{(\w+)\}/';
 
-    public function __construct($method, $path, $action) {
-        $this->method = $method;
+    /**
+     * Route name
+     *
+     * @var string|null
+     */
+    protected ?string $name = null;
+
+    /**
+     * Middleware
+     *
+     * @var array
+     */
+    protected array $middleware = [];
+
+    /**
+     * Route parameters from URI
+     *
+     * @var array
+     */
+    protected array $parameters = [];
+
+    /**
+     * Create a new route
+     *
+     * @param array $methods
+     * @param string $path
+     * @param callable|string|array $action
+     */
+    public function __construct(array $methods, string $path, $action)
+    {
+        $this->methods = array_map('strtoupper', $methods);
         $this->path = $path;
-        
-        if (is_string($action) && strpos($action, '@') !== false) {
-            list($this->controller, $this->controllerMethod) = explode('@', $action);
-            $this->action = $action;
-        } else {
-            $this->action = $action;
-        }
+        $this->action = $action;
     }
 
-    public function matches($method, $path) {
-        if ($method !== $this->method) {
-            return false;
-        }
-
-        return $this->pathMatches($path);
-    }
-
-    protected function pathMatches($path) {
-        $pattern = preg_replace($this->pattern, '([^/]+)', $this->path);
-        $pattern = '^' . $pattern . '$';
-        
-        if (!preg_match('/' . $pattern . '/', $path, $matches)) {
-            return false;
-        }
-
-        if (preg_match_all($this->pattern, $this->path, $paramNames)) {
-            $paramNames = $paramNames[1];
-            foreach ($paramNames as $i => $name) {
-                $this->parameters[$name] = $matches[$i + 1];
-            }
-        }
-
-        return true;
-    }
-
-    public function getController() {
-        return $this->controller ?: $this->action;
-    }
-
-    public function getMethod() {
-        return $this->controllerMethod ?? 'handle';
-    }
-
-    public function getParameters() {
-        return $this->parameters;
-    }
-
-    public function middleware($middleware) {
-        if (is_string($middleware)) {
-            $this->middleware[] = $middleware;
-        } else {
-            $this->middleware = array_merge($this->middleware, (array)$middleware);
-        }
-        return $this;
-    }
-
-    public function getMiddleware() {
-        return $this->middleware;
-    }
-
-    public function name($name) {
+    /**
+     * Set the route name
+     *
+     * @param string $name
+     * @return self
+     */
+    public function name(string $name): self
+    {
         $this->name = $name;
         return $this;
     }
 
-    public function getName() {
+    /**
+     * Get the route name
+     *
+     * @return string|null
+     */
+    public function getName(): ?string
+    {
         return $this->name;
     }
 
-    public function buildUrl($parameters = []) {
-        $url = $this->path;
-
-        foreach ($parameters as $key => $value) {
-            $url = str_replace('{' . $key . '}', $value, $url);
-        }
-
-        return $url;
+    /**
+     * Add middleware to route
+     *
+     * @param string|array $middleware
+     * @return self
+     */
+    public function middleware($middleware): self
+    {
+        $middlewares = is_array($middleware) ? $middleware : [$middleware];
+        $this->middleware = array_merge($this->middleware, $middlewares);
+        return $this;
     }
 
-    public function getPath() {
+    /**
+     * Get middleware
+     *
+     * @return array
+     */
+    public function getMiddleware(): array
+    {
+        return $this->middleware;
+    }
+
+    /**
+     * Get the action
+     *
+     * @return callable|string|array
+     */
+    public function getAction()
+    {
+        return $this->action;
+    }
+
+    /**
+     * Get HTTP methods
+     *
+     * @return array
+     */
+    public function getMethods(): array
+    {
+        return $this->methods;
+    }
+
+    /**
+     * Get the path
+     *
+     * @return string
+     */
+    public function getPath(): string
+    {
         return $this->path;
+    }
+
+    /**
+     * Check if route matches URI and method
+     *
+     * @param string $uri
+     * @param string $method
+     * @return bool
+     */
+    public function matches(string $uri, string $method): bool
+    {
+        if (!in_array($method, $this->methods)) {
+            return false;
+        }
+
+        $pattern = $this->compilePattern($this->path);
+        return (bool)preg_match($pattern, $uri, $matches);
+    }
+
+    /**
+     * Get parameters from URI
+     *
+     * @param string $uri
+     * @return array
+     */
+    public function getParameters(string $uri): array
+    {
+        $pattern = $this->compilePattern($this->path);
+        
+        if (!preg_match($pattern, $uri, $matches)) {
+            return [];
+        }
+
+        // Remove full match
+        array_shift($matches);
+
+        // Extract parameter names from path
+        $paramNames = [];
+        if (preg_match_all('/\{([a-z_]+)\}/', $this->path, $paramMatches)) {
+            $paramNames = $paramMatches[1];
+        }
+
+        // Combine parameter names with values
+        $parameters = [];
+        foreach ($paramNames as $index => $name) {
+            $parameters[$name] = $matches[$index] ?? null;
+        }
+
+        return $parameters;
+    }
+
+    /**
+     * Compile route path to regex pattern
+     *
+     * @param string $path
+     * @return string
+     */
+    protected function compilePattern(string $path): string
+    {
+        // Escape special regex characters except braces
+        $escaped = preg_replace('/[.+?^${}()|[\]\\\\]/', '\\$0', $path);
+
+        // Replace {param} with regex capture group
+        $pattern = preg_replace('/\{([a-z_]+)\}/', '([a-z0-9_-]+)', $escaped);
+
+        return '#^' . $pattern . '$#i';
     }
 }

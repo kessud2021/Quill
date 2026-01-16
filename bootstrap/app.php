@@ -1,65 +1,81 @@
 <?php
 
-use Framework\Foundation\Application;
+// Define base path
+define('BASE_PATH', dirname(__DIR__));
 
-if (!defined('FRAMEWORK_PATH')) {
-    define('FRAMEWORK_PATH', dirname(__DIR__));
-    define('APP_PATH', FRAMEWORK_PATH . '/app');
-    define('CONFIG_PATH', FRAMEWORK_PATH . '/config');
-    define('STORAGE_PATH', FRAMEWORK_PATH . '/storage');
-    define('RESOURCES_PATH', FRAMEWORK_PATH . '/resources');
-    define('PUBLIC_PATH', FRAMEWORK_PATH . '/public');
-    define('DATABASE_PATH', FRAMEWORK_PATH . '/database');
-}
+// Autoload
+require BASE_PATH . '/vendor/autoload.php';
 
-require FRAMEWORK_PATH . '/vendor/autoload.php';
+// Create container
+$container = new \Framework\Container\Container();
 
-$app = new Application(FRAMEWORK_PATH);
+// Store in global
+$GLOBALS['__app'] = $container;
 
-$app->loadEnvironment();
-$app->registerCoreServices();
-$app->loadConfiguration();
+// Load environment variables
+$dotenv = new \Framework\Env\DotEnv(BASE_PATH . '/.env');
+$dotenv->load();
 
-$app->singleton('auth', function ($app) {
-    return new \Framework\Auth\Guard();
+// Load configuration
+$config = new \Framework\Config\Config();
+
+$appConfig = \Framework\Config\Config::load(BASE_PATH . '/config/app.php');
+$databaseConfig = \Framework\Config\Config::load(BASE_PATH . '/config/database.php');
+$authConfig = \Framework\Config\Config::load(BASE_PATH . '/config/auth.php');
+
+// Merge all configs
+$allConfig = [
+    'app' => $appConfig,
+    'database' => $databaseConfig,
+    'auth' => $authConfig,
+];
+
+$config = new \Framework\Config\Config($allConfig);
+
+// Register services
+$container->singleton(\Framework\Config\Config::class, $config);
+
+// Database
+$container->singleton(\Framework\Database\Manager::class, function ($app) {
+    return new \Framework\Database\Manager($app[\Framework\Config\Config::class]);
 });
 
-$app->singleton('cache', function ($app) {
-    return new \Framework\Cache\Store($app['config']->get('cache.path'));
+// HTTP
+$container->singleton(\Framework\Http\Request::class, function () {
+    return new \Framework\Http\Request();
 });
 
-$app->singleton('session', function ($app) {
-    return new \Framework\Session\Manager($app['config']->get('session'));
+// Routing
+$container->singleton(\Framework\Routing\Router::class, function () {
+    return new \Framework\Routing\Router();
 });
 
-$app->singleton('request', function ($app) {
-    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-    $uri = $_SERVER['REQUEST_URI'] ?? '/';
-    return new \Framework\Http\Request($method, $uri, $_GET, $_POST, $_SERVER, $_COOKIE);
+// View
+$container->singleton(\Framework\View\View::class, function () {
+    return new \Framework\View\View();
 });
 
-require FRAMEWORK_PATH . '/routes/web.php';
+// Session
+$container->singleton(\Framework\Session\Manager::class, function () {
+    return new \Framework\Session\Manager();
+});
 
-$app->registerServiceProviders();
-$app->bootProviders();
+// Auth
+$container->singleton(\Framework\Auth\AuthManager::class, function ($app) {
+    return new \Framework\Auth\AuthManager();
+});
 
-return $app;
+// Logging
+$container->singleton(\Framework\Logging\Logger::class, function () {
+    return new \Framework\Logging\Logger();
+});
 
-function app($service = null) {
-    global $app;
-    if ($service === null) {
-        return $app;
-    }
-    return $app->get($service);
-}
+// Security
+$container->singleton(\Framework\Security\Csrf::class, function () {
+    return new \Framework\Security\Csrf();
+});
 
-function config($key = null, $default = null) {
-    if ($key === null) {
-        return app('config');
-    }
-    return app('config')->get($key, $default);
-}
+// Load routes
+require BASE_PATH . '/routes/web.php';
 
-function env($key, $default = null) {
-    return app('env')->get($key, $default);
-}
+return $container;

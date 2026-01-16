@@ -2,80 +2,187 @@
 
 namespace Framework\Routing;
 
-class Router {
-    protected $routes = [];
-    protected $namedRoutes = [];
-    protected $currentGroup = [];
+use Framework\Http\Request;
+use Framework\Http\Response;
 
-    public function get($path, $action) {
-        return $this->addRoute('GET', $path, $action);
+/**
+ * Router for handling HTTP requests and routing
+ */
+class Router
+{
+    /**
+     * All registered routes
+     *
+     * @var array
+     */
+    protected array $routes = [];
+
+    /**
+     * Named routes
+     *
+     * @var array
+     */
+    protected array $namedRoutes = [];
+
+    /**
+     * Current route group prefix
+     *
+     * @var string
+     */
+    protected string $groupPrefix = '';
+
+    /**
+     * Current route group middleware
+     *
+     * @var array
+     */
+    protected array $groupMiddleware = [];
+
+    /**
+     * Register a GET route
+     *
+     * @param string $path
+     * @param callable|string|array $action
+     * @return Route
+     */
+    public function get(string $path, $action): Route
+    {
+        return $this->addRoute(['GET', 'HEAD'], $path, $action);
     }
 
-    public function post($path, $action) {
-        return $this->addRoute('POST', $path, $action);
+    /**
+     * Register a POST route
+     *
+     * @param string $path
+     * @param callable|string|array $action
+     * @return Route
+     */
+    public function post(string $path, $action): Route
+    {
+        return $this->addRoute(['POST'], $path, $action);
     }
 
-    public function put($path, $action) {
-        return $this->addRoute('PUT', $path, $action);
+    /**
+     * Register a PUT route
+     *
+     * @param string $path
+     * @param callable|string|array $action
+     * @return Route
+     */
+    public function put(string $path, $action): Route
+    {
+        return $this->addRoute(['PUT'], $path, $action);
     }
 
-    public function patch($path, $action) {
-        return $this->addRoute('PATCH', $path, $action);
+    /**
+     * Register a PATCH route
+     *
+     * @param string $path
+     * @param callable|string|array $action
+     * @return Route
+     */
+    public function patch(string $path, $action): Route
+    {
+        return $this->addRoute(['PATCH'], $path, $action);
     }
 
-    public function delete($path, $action) {
-        return $this->addRoute('DELETE', $path, $action);
+    /**
+     * Register a DELETE route
+     *
+     * @param string $path
+     * @param callable|string|array $action
+     * @return Route
+     */
+    public function delete(string $path, $action): Route
+    {
+        return $this->addRoute(['DELETE'], $path, $action);
     }
 
-    public function any($path, $action) {
-        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
-            $this->addRoute($method, $path, $action);
-        }
+    /**
+     * Register a route for all HTTP methods
+     *
+     * @param string $path
+     * @param callable|string|array $action
+     * @return Route
+     */
+    public function any(string $path, $action): Route
+    {
+        return $this->addRoute(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'], $path, $action);
     }
 
-    protected function addRoute($method, $path, $action) {
-        $path = $this->applyGroup($path);
-        
-        $route = new Route($method, $path, $action);
-
-        if (!empty($this->currentGroup)) {
-            $route->middleware($this->currentGroup['middleware'] ?? []);
-        }
-
-        $this->routes[] = $route;
-
-        if (isset($this->currentGroup['name'])) {
-            $route->name($this->currentGroup['name'] . '.' . ($this->currentGroup['name_count'] ?? 0)++);
-        }
-
-        return $route;
+    /**
+     * Register a resource route
+     *
+     * @param string $name
+     * @param string $controller
+     * @return void
+     */
+    public function resource(string $name, string $controller): void
+    {
+        $this->get($name, [$controller, 'index'])->name("{$name}.index");
+        $this->get("{$name}/create", [$controller, 'create'])->name("{$name}.create");
+        $this->post($name, [$controller, 'store'])->name("{$name}.store");
+        $this->get("{$name}/{id}", [$controller, 'show'])->name("{$name}.show");
+        $this->get("{$name}/{id}/edit", [$controller, 'edit'])->name("{$name}.edit");
+        $this->put("{$name}/{id}", [$controller, 'update'])->name("{$name}.update");
+        $this->delete("{$name}/{id}", [$controller, 'destroy'])->name("{$name}.destroy");
     }
 
-    public function group($options, $callback) {
-        $previousGroup = $this->currentGroup;
-        $this->currentGroup = $options;
+    /**
+     * Create a route group
+     *
+     * @param array $attributes
+     * @param callable $callback
+     * @return void
+     */
+    public function group(array $attributes, callable $callback): void
+    {
+        $previousPrefix = $this->groupPrefix;
+        $previousMiddleware = $this->groupMiddleware;
 
-        if (!isset($this->currentGroup['name_count'])) {
-            $this->currentGroup['name_count'] = 0;
-        }
+        $this->groupPrefix = $previousPrefix . ($attributes['prefix'] ?? '');
+        $this->groupMiddleware = array_merge($previousMiddleware, $attributes['middleware'] ?? []);
 
         call_user_func($callback, $this);
 
-        $this->currentGroup = $previousGroup;
+        $this->groupPrefix = $previousPrefix;
+        $this->groupMiddleware = $previousMiddleware;
     }
 
-    protected function applyGroup($path) {
-        if (!empty($this->currentGroup) && isset($this->currentGroup['prefix'])) {
-            return '/' . trim($this->currentGroup['prefix'], '/') . $path;
+    /**
+     * Add a route
+     *
+     * @param array $methods
+     * @param string $path
+     * @param callable|string|array $action
+     * @return Route
+     */
+    protected function addRoute(array $methods, string $path, $action): Route
+    {
+        $path = $this->groupPrefix . $path;
+        $route = new Route($methods, $path, $action);
+
+        if (!empty($this->groupMiddleware)) {
+            $route->middleware($this->groupMiddleware);
         }
-        return $path;
+
+        $this->routes[] = $route;
+        return $route;
     }
 
-    public function match($method, $uri) {
-        $path = parse_url($uri, PHP_URL_PATH) ?: '/';
+    /**
+     * Match a request to a route
+     *
+     * @param Request $request
+     * @return Route|null
+     */
+    public function match(Request $request): ?Route
+    {
+        $path = $request->path();
+        $method = $request->method();
 
         foreach ($this->routes as $route) {
-            if ($route->matches($method, $path)) {
+            if ($route->matches($path, $method)) {
                 return $route;
             }
         }
@@ -83,16 +190,37 @@ class Router {
         return null;
     }
 
-    public function url($name, $parameters = []) {
+    /**
+     * Get the URL for a named route
+     *
+     * @param string $name
+     * @param array $parameters
+     * @return string
+     */
+    public function url(string $name, array $parameters = []): string
+    {
         foreach ($this->routes as $route) {
             if ($route->getName() === $name) {
-                return $route->buildUrl($parameters);
+                $path = $route->getPath();
+
+                foreach ($parameters as $param => $value) {
+                    $path = str_replace('{' . $param . '}', $value, $path);
+                }
+
+                return '/' . ltrim($path, '/');
             }
         }
-        return null;
+
+        return '/';
     }
 
-    public function getRoutes() {
+    /**
+     * Get all routes
+     *
+     * @return array
+     */
+    public function getRoutes(): array
+    {
         return $this->routes;
     }
 }

@@ -3,136 +3,248 @@
 namespace Framework\Container;
 
 use Closure;
-use ArrayAccess;
 use ReflectionClass;
 use ReflectionParameter;
 
-class Container implements ArrayAccess {
-    protected $bindings = [];
-    protected $instances = [];
-    protected $resolved = [];
+/**
+ * Service Container for dependency injection
+ * 
+ * Manages service bindings, singletons, and automatic resolution
+ */
+class Container
+{
+    /**
+     * The registered bindings in the container
+     *
+     * @var array
+     */
+    protected array $bindings = [];
 
-    public function bind($abstract, $concrete = null, $shared = false) {
+    /**
+     * The registered singletons in the container
+     *
+     * @var array
+     */
+    protected array $instances = [];
+
+    /**
+     * The resolved instances cache
+     *
+     * @var array
+     */
+    protected array $resolved = [];
+
+    /**
+     * Bind a service to the container
+     *
+     * @param string $abstract
+     * @param Closure|string|null $concrete
+     * @return void
+     */
+    public function bind(string $abstract, $concrete = null): void
+    {
         if ($concrete === null) {
             $concrete = $abstract;
         }
 
-        if ($concrete instanceof Closure) {
-            $this->bindings[$abstract] = compact('concrete', 'shared');
-        } else {
-            $this->bindings[$abstract] = [
-                'concrete' => $concrete,
-                'shared' => $shared,
-            ];
+        if (!$concrete instanceof Closure) {
+            $concrete = $this->getClosure($abstract, $concrete);
         }
+
+        $this->bindings[$abstract] = [
+            'concrete' => $concrete,
+            'singleton' => false,
+        ];
     }
 
-    public function singleton($abstract, $concrete = null) {
-        $this->bind($abstract, $concrete, true);
+    /**
+     * Bind a singleton to the container
+     *
+     * @param string $abstract
+     * @param Closure|string|null $concrete
+     * @return void
+     */
+    public function singleton(string $abstract, $concrete = null): void
+    {
+        $this->bind($abstract, $concrete);
+        $this->bindings[$abstract]['singleton'] = true;
     }
 
-    public function instance($abstract, $instance) {
+    /**
+     * Register an instance as singleton
+     *
+     * @param string $abstract
+     * @param mixed $instance
+     * @return void
+     */
+    public function instance(string $abstract, $instance): void
+    {
         $this->instances[$abstract] = $instance;
     }
 
-    public function make($abstract, $parameters = []) {
+    /**
+     * Resolve a service from the container
+     *
+     * @param string $abstract
+     * @return mixed
+     */
+    public function make(string $abstract)
+    {
+        // Check if already instantiated as singleton
         if (isset($this->instances[$abstract])) {
             return $this->instances[$abstract];
         }
 
+        // Check if binding exists
         if (!isset($this->bindings[$abstract])) {
-            return $this->resolve($abstract, $parameters);
+            // Try to auto-resolve class
+            return $this->resolve($abstract);
         }
 
         $binding = $this->bindings[$abstract];
         $concrete = $binding['concrete'];
 
-        if ($concrete instanceof Closure) {
-            $instance = call_user_func($concrete, $this, $parameters);
-        } else {
-            $instance = $this->resolve($concrete, $parameters);
-        }
+        // Call the binding's concrete
+        $instance = $concrete($this);
 
-        if ($binding['shared'] ?? false) {
+        // If singleton, cache the instance
+        if ($binding['singleton']) {
             $this->instances[$abstract] = $instance;
         }
 
         return $instance;
     }
 
-    public function resolve($abstract, $parameters = []) {
+    /**
+     * Get a closure for a binding
+     *
+     * @param string $abstract
+     * @param string|Closure $concrete
+     * @return Closure
+     */
+    protected function getClosure(string $abstract, $concrete): Closure
+    {
+        return function ($container) use ($abstract, $concrete) {
+            if ($concrete === $abstract) {
+                return $container->resolve($abstract);
+            }
+            return $container->make($concrete);
+        };
+    }
+
+    /**
+     * Resolve a class instance
+     *
+     * @param string $class
+     * @return mixed
+     */
+    public function resolve(string $class)
+    {
         try {
-            $reflection = new ReflectionClass($abstract);
-        } catch (\ReflectionException $e) {
-            throw new \Exception("Unable to resolve: $abstract");
-        }
+            $reflection = new ReflectionClass($class);
 
-        if (!$reflection->isInstantiable()) {
-            throw new \Exception("Class is not instantiable: $abstract");
-        }
-
-        $constructor = $reflection->getConstructor();
-
-        if ($constructor === null) {
-            return new $abstract();
-        }
-
-        $params = $this->resolveParameters($constructor->getParameters(), $parameters);
-
-        return $reflection->newInstanceArgs($params);
-    }
-
-    protected function resolveParameters($parameters, $givenParams = []) {
-        $resolved = [];
-
-        foreach ($parameters as $parameter) {
-            if (array_key_exists($parameter->getName(), $givenParams)) {
-                $resolved[] = $givenParams[$parameter->getName()];
-                continue;
+            if (!$reflection->isInstantiable()) {
+                throw new \RuntimeException("Class {$class} cannot be instantiated");
             }
 
-            $type = $parameter->getType();
+            $constructor = $reflection->getConstructor();
 
-            if ($type && !$type->isBuiltin()) {
-                $className = $type->getName();
-                if ($this->has($className)) {
-                    $resolved[] = $this->make($className);
+            if ($constructor === null) {
+                return new $class();
+            }
+
+            $parameters = $constructor->getParameters();
+            $dependencies = [];
+
+            foreach ($parameters as $parameter) {
+                $dependency = $parameter->getType();
+
+                if ($dependency === null) {
+                    if ($parameter->isDefaultValueAvailable()) {
+                        $dependencies[] = $parameter->getDefaultValue();
+                    } else {
+                        throw new \RuntimeException("Cannot resolve parameter {$parameter->getName()} in {$class}");
+                    }
                 } else {
-                    $resolved[] = $this->resolve($className);
+                    $dependencyName = $dependency->getName();
+                    $dependencies[] = $this->make($dependencyName);
                 }
-            } elseif ($parameter->isDefaultValueAvailable()) {
-                $resolved[] = $parameter->getDefaultValue();
             }
-        }
 
-        return $resolved;
+            return new $class(...$dependencies);
+        } catch (\ReflectionException $e) {
+            throw new \RuntimeException("Cannot resolve class {$class}: " . $e->getMessage());
+        }
     }
 
-    public function has($abstract) {
+    /**
+     * Check if a binding exists
+     *
+     * @param string $abstract
+     * @return bool
+     */
+    public function has(string $abstract): bool
+    {
         return isset($this->bindings[$abstract]) || isset($this->instances[$abstract]);
     }
 
-    public function get($abstract) {
-        return $this->make($abstract);
+    /**
+     * Get all bindings
+     *
+     * @return array
+     */
+    public function getBindings(): array
+    {
+        return $this->bindings;
     }
 
-    public function offsetExists($offset): bool {
-        return $this->has($offset);
-    }
-
-    public function offsetGet($offset): mixed {
-        return $this->make($offset);
-    }
-
-    public function offsetSet($offset, $value): void {
-        if ($value instanceof Closure) {
-            $this->bind($offset, $value);
-        } else {
-            $this->instance($offset, $value);
+    /**
+     * Call a function with dependency injection
+     *
+     * @param callable $callback
+     * @param array $parameters
+     * @return mixed
+     */
+    public function call(callable $callback, array $parameters = [])
+    {
+        if (is_array($callback)) {
+            [$instance, $method] = $callback;
+            return $this->callMethod($instance, $method, $parameters);
         }
+
+        return $callback($this, ...$parameters);
     }
 
-    public function offsetUnset($offset): void {
-        unset($this->bindings[$offset], $this->instances[$offset]);
+    /**
+     * Call a method with dependency injection
+     *
+     * @param object $instance
+     * @param string $method
+     * @param array $parameters
+     * @return mixed
+     */
+    public function callMethod($instance, string $method, array $parameters = [])
+    {
+        $reflection = new ReflectionClass($instance);
+        $reflectionMethod = $reflection->getMethod($method);
+
+        $methodParameters = $reflectionMethod->getParameters();
+        $dependencies = [];
+
+        foreach ($methodParameters as $parameter) {
+            if (isset($parameters[$parameter->getName()])) {
+                $dependencies[] = $parameters[$parameter->getName()];
+            } else {
+                $dependency = $parameter->getType();
+                if ($dependency !== null) {
+                    $dependencyName = $dependency->getName();
+                    $dependencies[] = $this->make($dependencyName);
+                } elseif ($parameter->isDefaultValueAvailable()) {
+                    $dependencies[] = $parameter->getDefaultValue();
+                }
+            }
+        }
+
+        return $reflectionMethod->invokeArgs($instance, $dependencies);
     }
 }

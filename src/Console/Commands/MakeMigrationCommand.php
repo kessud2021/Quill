@@ -2,54 +2,84 @@
 
 namespace Framework\Console\Commands;
 
-class MakeMigrationCommand extends Command {
-    protected $signature = 'make:migration';
-    protected $description = 'Create a new migration file';
+use Framework\Console\Command;
 
-    public function handle($args) {
-        if (empty($args)) {
-            $this->error('Please provide a migration name');
+/**
+ * Make migration command
+ */
+class MakeMigrationCommand extends Command
+{
+    /**
+     * Handle the command
+     *
+     * @param array $arguments
+     * @return int
+     */
+    public function handle(array $arguments): int
+    {
+        if (empty($arguments[0])) {
+            $this->error('Migration name required');
             return 1;
         }
 
-        $name = $args[0];
+        $name = $arguments[0];
+        $migrationsPath = database_path('migrations');
+
+        if (!is_dir($migrationsPath)) {
+            mkdir($migrationsPath, 0755, true);
+        }
+
         $timestamp = date('Y_m_d_His');
-        $filename = $timestamp . '_' . $name . '.php';
-        $path = DATABASE_PATH . '/migrations/' . $filename;
-
-        @mkdir(dirname($path), 0755, true);
-
         $className = $this->getClassName($name);
+        $file = $migrationsPath . '/' . $timestamp . '_' . $name . '.php';
 
-        $stub = <<<PHP
-<?php
+        $stub = $this->getStub($className);
+        file_put_contents($file, $stub);
 
-namespace Database\Migrations;
-
-use Framework\Database\Migrations\Migration;
-
-class $className extends Migration {
-    public function up() {
-        \$this->schema()->create('table_name', function (\$table) {
-            \$table->id();
-            \$table->timestamps();
-        });
-    }
-
-    public function down() {
-        \$this->schema()->drop('table_name');
-    }
-}
-PHP;
-
-        file_put_contents($path, $stub);
-
-        $this->info("Migration created: $filename");
+        $this->info("Created migration: {$name}");
         return 0;
     }
 
-    protected function getClassName($name) {
-        $parts = explode('_', $name);
-        return implode('', array_map('ucfirst', $parts));
+    /**
+     * Get class name
+     *
+     * @param string $name
+     * @return string
+     */
+    protected function getClassName(string $name): string
+    {
+        return str_replace('_', '', ucwords($name, '_'));
+    }
+
+    /**
+     * Get stub
+     *
+     * @param string $className
+     * @return string
+     */
+    protected function getStub(string $className): string
+    {
+        return <<<PHP
+<?php
+
+class {$className}
+{
+    /**
+     * Run the migration
+     */
+    public function up(): void
+    {
+        // Create table or modify schema
+    }
+
+    /**
+     * Rollback the migration
+     */
+    public function down(): void
+    {
+        // Reverse the migration
+    }
+}
+PHP;
     }
 }
